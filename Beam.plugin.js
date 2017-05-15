@@ -2,6 +2,7 @@
 var Beam = function()
 {
     'use strict';
+    const VERSION = '0.2.6';
     let ENABLED = false;
 
     /**
@@ -154,16 +155,16 @@ var Beam = function()
             let logo = $('<div/>', {'css': {'flex': '0 0 0%', 'min-height': '40px', 'background-repeat': 'no-repeat', 'background-attachement': 'fixed', 'background-position': 'center', 'background-color': '#0D1529', 'background-image': 'url("data:image/svg+xml;base64,' + BeamLogoText + '")'}});
             let wrapper = $('<div/>', {'id': 'beam-container', 'class': 'ui-flex flex-vertical'});
             let frame = $('<iframe/>', {'id': 'beam-chat', 'css': {'flex': '1'}});
-            frame.attr('src', 'https://beam.pro/embed/chat/' + CONFIG.last);
-            wrapper.append(logo, frame);
+            frame.attr('src', 'https://beam.pro/embed/chat/' + CONFIG.users[CONFIG.last].id);
+            wrapper.append(logo.html('<a href="https://beam.pro/' + CONFIG.last + '" target="_blank" style="position:relative; display:block; width:100%; height:100%;">&nbsp;</a>'), frame);
             container.append(wrapper);
             if(CONFIG.video) {
                 toggleVideo();
             }
         } else if(CONFIG.active && $('#beam-container')[0] != undefined) {
-            $('#beam-chat').attr('src', 'https://beam.pro/embed/chat/' + CONFIG.last);
+            $('#beam-chat').attr('src', 'https://beam.pro/embed/chat/' + CONFIG.users[CONFIG.last].id);
             if($('#beam-video')[0] != undefined) {
-                $('#beam-video').attr('src', 'https://beam.pro/embed/player/' + CONFIG.last);
+                $('#beam-video').attr('src', 'https://beam.pro/embed/player/' + CONFIG.users[CONFIG.last].id);
             }
         } else {
 
@@ -380,7 +381,7 @@ var Beam = function()
      * @param function callback
      */
     function Input(callback) {
-        let container = $('<div/>', {'class': 'search-bar-icon ui-flex flex-horizontal', 'css': {'flex': '0 0 0%', 'width': 'auto', 'margin': '10px 10px 0px 10px'}});
+        let container = $('<div/>', {'class': 'search-bar-icon ui-flex flex-horizontal', 'css': {'flex': '0 0 0%', 'width': 'auto', 'margin': '10px 20px 0px 13px'}});
         let clr = (theme() == 'dark') ? 'rgba(255,255,255, 0.7)' : 'rgba(0,0,0, 0.7)';
         let input = $('<input/>', {'id': 'beam-search-streamer', 'placeholder': 'Search...', 'class': 'ui-input-button default', 'css': {'flex': '1 1 auto', 'font-weight': 'inherit', 'font-size': 'inherit', 'color': clr, 'padding-left': '5px'}});
         if(callback != undefined) {
@@ -399,8 +400,8 @@ var Beam = function()
      */
     function Toggle(title, checked, callback) {
         checked = checked || false;
-        let container = $('<div/>', {'class': 'ui-flex flex-horizontal', 'css': {'flex': '0 0 0%', 'margin': '3px 10px'}});
-        let text = $('<h3/>', {'class': 'ui-form-title h5 ui-flex-child'}).text(title);
+        let container = $('<div/>', {'class': 'ui-flex flex-horizontal', 'css': {'flex': '0 0 0%', 'margin': '4px 20px 4px 13px'}});
+        let text = $('<h3/>', {'class': 'ui-form-title h3 ui-flex-child'}).text(title);
         let label = $('<label/>', {'class': 'ui-switch-wrapper ui-flex-child'});
         let checkbox = $('<input/>', {'type': 'checkbox', 'checked': checked, 'class': 'ui-switch-checkbox'});
         let button = $('<div/>', {'class': 'ui-switch'});
@@ -447,7 +448,7 @@ var Beam = function()
         container.append(avatar, comment, buttons);
 
         comment.on('mouseup', (e) => {
-            CONFIG.last = user.id;
+            CONFIG.last = user.name;
             attachBeam();
         });
 
@@ -518,7 +519,7 @@ var Beam = function()
      * @return string
      */
     this.getVersion = () => {
-        return '0.2.4';
+        return VERSION;
     };
 
     // ---------------------------------------------------------------------- //

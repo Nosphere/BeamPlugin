@@ -1,11 +1,12 @@
 {
-    "version": "0.2.5",
+    "version": "0.2.6",
     "notes": {
         "credits": [
             "NoxDraconem for alpha, beta, delta and omega testing."
         ],
         "changes": [
-            "Added Beam logo above the chat, just for NoxDraconem"
+            "Added Beam logo above the chat, just for NoxDraconem",
+            "Beam logo is now clickable and leads to the active channel"
         ],
         "fixes": [
             "Fixed flex issue on popout controls when more then 4 users were added.",

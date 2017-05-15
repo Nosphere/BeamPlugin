@@ -1,0 +1,19 @@
+{
+    "version": "0.2.5",
+    "notes": {
+        "credits": [
+            "NoxDraconem for alpha, beta, delta and omega testing."
+        ],
+        "changes": [
+            "Added Beam logo above the chat, just for NoxDraconem"
+        ],
+        "fixes": [
+            "Fixed flex issue on popout controls when more then 4 users were added.",
+            "Fixed online/offline status check."
+        ],
+        "issues": [
+            "Beam button needs to be clicked twice when the popout was closed by a mouse click outside of the popout.",
+            "Beam Button moves from first position on switching guilds/friends."
+        ]
+    }
+}

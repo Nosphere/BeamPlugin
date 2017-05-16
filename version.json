@@ -1,5 +1,5 @@
 {
-    "version": "0.2.7",
+    "version": "0.2.71",
     "notes": {
         "credits": [
             "NoxDraconem for alpha, beta, delta and omega testing."
@@ -10,7 +10,8 @@
             "Beam button will now properly be added/removed when the plugin itself is enabled/disabled."
         ],
         "fixes": [
-            "Fixed an issue with the Beam button not properly toggling off when the popout was closed by clicks outside of the buttons itself."
+            "Fixed an issue with the Beam button not properly toggling off when the popout was closed by clicks outside of the buttons itself.",
+            "Fixed update check cache issue which caused the update check to not get correct data on discord restarts."
         ],
         "issues": [
             "Beam Button can change position in the toolbar when switching from friends to guilds."

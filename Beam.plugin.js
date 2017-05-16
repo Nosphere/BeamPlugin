@@ -2,7 +2,7 @@
 var Beam = function()
 {
     'use strict';
-    const VERSION = '0.2.6';
+    const VERSION = '0.2.7';
     let ENABLED = false;
 
     /**
@@ -24,6 +24,7 @@ var Beam = function()
         last: null,
         active: false,
         video: false,
+        offline: false,
         users: {}
     };
 
@@ -34,7 +35,6 @@ var Beam = function()
         let current = self.getVersion().split('.');
         $.get(GITHUB, function(data) {
         }, 'json').done(function(data) {
-            trace(data);
             let up = data.version.split('.');
             for(let i in up) {
                 if(parseInt(up[i]) > parseInt(current[i])) {
@@ -238,7 +238,7 @@ var Beam = function()
             };
 
             if($('#beam-popout-scroller')[0] != undefined) {
-                $('#beam-popout-scroller').prepend(Card(CONFIG.users[user.user.username]));
+                ListUsers($('#beam-popout-scroller'));
             }
             trace('Added user ' + user.user.username);
             save();
@@ -253,7 +253,7 @@ var Beam = function()
         if(CONFIG.users[name] != undefined) {
             delete CONFIG.users[name];
             if($('#beam-popout-scroller')[0] != undefined) {
-                $('.message-group[data-id="' + name + '"]').remove();
+                ListUsers($('#beam-popout-scroller'));
             }
             trace('Removed user ' + name);
             save();
@@ -318,6 +318,7 @@ var Beam = function()
     function ClosePopup() {
         $('#beam-popout').remove();
         $('.app').off('mouseup', ClosePopup);
+        $('#beam-button').removeClass('popout-open');
         save();
     };
 
@@ -333,7 +334,7 @@ var Beam = function()
         let wrapper = $('<div/>', {'class': 'messages-popout-wrap themed-popout undefined', 'css': {'max-height': '480px'}});
         let header = $('<div/>', {'class': 'header'})
         let text = $('<div/>', {'class': 'title'}).text(title);
-        //let controls = $('<div/>', 'css': {'flex': '0 0 0%'});
+        let controls = $('<div/>', {'class': 'ui-flex flex-horizontal', 'css': {'flex': '0 0 0%', 'margin': '4px 20px 4px 13px'}});
         let thm = (theme() == 'dark') ? 'dark' : '';
         let scrollerWrap = $('<div/>', {'class': 'scroller-wrap ' + thm});
         let scroller = $('<div/>', {'id': id + '-scroller', 'class': 'scroller messages-popout'});
@@ -361,20 +362,45 @@ var Beam = function()
             toggleVideo();
         });
 
-        for(name in CONFIG.users) {
-            scroller.append(Card(CONFIG.users[name]));
-        }
+        let offline = Toggle('Offline', CONFIG.offline, (e) => {
+            CONFIG.offline = e.target.checked;
+            ListUsers(scroller);
+        });
 
+        ListUsers(scroller);
         wrapper.append(
             header.append(text),
             search,
-            enable,
-            video,
+            controls.append(enable, video, offline),
             scrollerWrap.append(scroller)
         );
         container.append(wrapper);
         return container;
     };
+
+    /**
+     * Builds the user cards for the popout
+     * @param jQuery el
+     */
+    function ListUsers(el) {
+        console.log(el.children().length);
+        if(el.children().length > 0) {
+            el.empty();
+        }
+
+        if(Object.keys(CONFIG.users).length > 0) {
+            for(name in CONFIG.users) {
+                if(CONFIG.offline == true) {
+                    if(CONFIG.users[name].online == false) {
+                        continue;
+                    }
+                }
+                el.append(Card(CONFIG.users[name]));
+            }
+        } else {
+            el.html('<div class="empty-placeholder"><div class="body">You have no streamers added... yet.</div></div>');
+        }
+    }
 
     /**
      * Creates a textbox input using discord style
@@ -400,7 +426,7 @@ var Beam = function()
      */
     function Toggle(title, checked, callback) {
         checked = checked || false;
-        let container = $('<div/>', {'class': 'ui-flex flex-horizontal', 'css': {'flex': '0 0 0%', 'margin': '4px 20px 4px 13px'}});
+        let container = $('<div/>', {'class': 'ui-flex flex-horizontal', 'css': {'flex': '1 1 100%'}});
         let text = $('<h3/>', {'class': 'ui-form-title h3 ui-flex-child'}).text(title);
         let label = $('<label/>', {'class': 'ui-switch-wrapper ui-flex-child'});
         let checkbox = $('<input/>', {'type': 'checkbox', 'checked': checked, 'class': 'ui-switch-checkbox'});
@@ -429,8 +455,7 @@ var Beam = function()
         let text = $('<div/>', {'class': 'message'});
         let buttons = $('<div/>', {'class': 'action-buttons'});
         let btnDelete = $('<span/>', {'class': 'close-button'}).click(() => { removeUser(user.name) });
-
-        text.html('<div class="body"><h2><span class="username-wrapper"><strong class="user-name">' + user.name + '</strong></span><span class="timestamp"><a href="http://beam.pro/' + user.name + '" target="_blank">beam.pro</a></h2><div class="message-text"><div class="markup">' + user.title + '</div></div></div>');
+        let nameColor = null;
 
         if(user.partner == true) {
             let partner = $('<div/>', {'class': 'jump-button', 'css': {'background': '#8150EF', 'color': 'white'}}).text('Partner');
@@ -438,10 +463,12 @@ var Beam = function()
         }
 
         if(user.featured == true) {
+            nameColor = 'color: #f1c40f;';
             let feat = $('<div/>', {'class': 'jump-button', 'css': {'background': '#f1c40f', 'color': 'white'}}).text('Featured');
             buttons.prepend(feat);
         }
 
+        text.html('<div class="body"><h2><span class="username-wrapper"><strong class="user-name" style="' + nameColor + '">' + user.name + '</strong></span><span class="timestamp"><a href="http://beam.pro/' + user.name + '" target="_blank">beam.pro</a></h2><div class="message-text"><div class="markup">' + user.title + '</div></div></div>');
         avatar.append(status);
         comment.append(text);
         buttons.append(btnDelete);
@@ -469,8 +496,7 @@ var Beam = function()
 
     this.load = () => {
         updateCheck();
-        CONFIG = load();
-        attachButton();
+        CONFIG = $.extend({}, CONFIG, load());
     };
 
     this.unload = () => {
@@ -478,6 +504,7 @@ var Beam = function()
     };
 
     this.start = () => {
+        attachButton();
         updateCallback = setInterval(updateUsers, updateInterval);
         if(CONFIG.active) {
             attachBeam();
@@ -486,6 +513,7 @@ var Beam = function()
     };
 
     this.stop = () => {
+        detachButton();
         if(updateCallback != null) {
             clearInterval(updateCallback);
             updateCallback = null;

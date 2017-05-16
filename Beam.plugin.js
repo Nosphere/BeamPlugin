@@ -2,7 +2,7 @@
 var Beam = function()
 {
     'use strict';
-    const VERSION = '0.2.7';
+    const VERSION = '0.2.71';
     let ENABLED = false;
 
     /**
@@ -33,7 +33,7 @@ var Beam = function()
     // ---------------------------------------------------------------------- //
     function updateCheck() {
         let current = self.getVersion().split('.');
-        $.get(GITHUB, function(data) {
+        $.get(GITHUB, {'now': $.now()} , function(data) {
         }, 'json').done(function(data) {
             let up = data.version.split('.');
             for(let i in up) {
@@ -48,7 +48,7 @@ var Beam = function()
                         str += '<li>' + data.notes.fixes[n] + '</li>';
                     }
                         str += '</ul><h3 class="h5">Known Issues:</h3><ul>';
-                    for(let n in data.notes.changes) {
+                    for(let n in data.notes.issues) {
                         str += '<li>' + data.notes.issues[n] + '</li>';
                     }
                         str += '</ul><h3 class="h5">Special thanks:</h3><ul>';

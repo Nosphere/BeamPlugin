@@ -2,7 +2,7 @@
 var Beam = function()
 {
     'use strict';
-    const VERSION = '0.2.71';
+    const VERSION = '0.2.72';
     let ENABLED = false;
 
     /**
@@ -33,7 +33,7 @@ var Beam = function()
     // ---------------------------------------------------------------------- //
     function updateCheck() {
         let current = self.getVersion().split('.');
-        $.get(GITHUB, {'cache': $.now()}, function(data) {
+        $.get(GITHUB, {'now': $.now()} , function(data) {
         }, 'json').done(function(data) {
             let up = data.version.split('.');
             for(let i in up) {
@@ -105,7 +105,7 @@ var Beam = function()
      */
     function attachButton() {
         let logo = (CONFIG.active == true) ? BeamLogoActive : ((theme() == 'dark') ? BeamLogoWhite : BeamLogoBlack);
-        let btn = $('<button/>', {'id': 'beam-button', 'type': 'button'});
+        let btn = $('<button/>', {'id': 'beam-button', 'type': 'button', 'css': {'order': '-1'}});
         let img = $('<span/>', {'id': 'beam-logo'}).css({'background-image': 'url("data:image/svg+xml;base64,' + logo + '")'});
 
         btn.on('click', (evt) => {
@@ -334,7 +334,7 @@ var Beam = function()
         let wrapper = $('<div/>', {'class': 'messages-popout-wrap themed-popout undefined', 'css': {'max-height': '480px'}});
         let header = $('<div/>', {'class': 'header'})
         let text = $('<div/>', {'class': 'title'}).text(title);
-        let controls = $('<div/>', {'class': 'ui-flex flex-horizontal', 'css': {'flex': '0 0 0%', 'margin': '4px 20px 4px 13px'}});
+        let controls = $('<div/>', {'class': 'ui-flex flex-horizontal', 'css': {'flex': '0 0 0%', 'margin': '13px 20px 0px 13px'}});
         let thm = (theme() == 'dark') ? 'dark' : '';
         let scrollerWrap = $('<div/>', {'class': 'scroller-wrap ' + thm});
         let scroller = $('<div/>', {'id': id + '-scroller', 'class': 'scroller messages-popout'});
@@ -476,6 +476,7 @@ var Beam = function()
 
         comment.on('mouseup', (e) => {
             CONFIG.last = user.name;
+            ClosePopup();
             attachBeam();
         });
 

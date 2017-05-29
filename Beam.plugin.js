@@ -1,45 +1,41 @@
 //META{"name":"Beam"}*//
-var Beam = function()
+/**
+ * @TODO Popout should close on outside clicks.
+ */
+class Beam
 {
-    'use strict';
-    const VERSION = '0.2.72';
-    let ENABLED = false;
+    constructor() {
+    }
+
+    // #region Plugin Methods
+    trace() {
+        let str = '%c[' + this.getName() + ']: ';
+        for(let i in arguments) {
+            console.log(str, 'width:100%!important;background-color:#3498db;color:#ecf0f1;padding:2px 4px;', arguments[i]);
+        }
+    }
 
     /**
-     * Status update interval (5min)
-     * @var int
+     * Shorthand function for Core.prototype.alert
+     * @param string message
      */
-    let updateInterval = (1000 * 60) * 5;
-    /**
-     * Status update function
-     * @var function
-     */
-    let updateCallback = null;
+    alert(title, str) {
+        Core.prototype.alert(title, '<div style="font-weight: normal;">' + str + '</div>');
+    }
 
-    /**
-     * Configuration Object
-     * @var Object
-     */
-    let CONFIG = {
-        last: null,
-        active: false,
-        video: false,
-        offline: false,
-        users: {}
-    };
-
-    // ---------------------------------------------------------------------- //
-    // Functions                                                              //
-    // ---------------------------------------------------------------------- //
-    function updateCheck() {
-        let current = self.getVersion().split('.');
-        $.get(GITHUB, {'now': $.now()} , function(data) {
-        }, 'json').done(function(data) {
+    updateCheck() {
+        let current = this.getVersion().split('.');
+        $.get(this.github.replace('{{FILE}}', 'version.json'), {'now': $.now()} , (data) => {
+        }, 'json').done((data) => {
             let up = data.version.split('.');
             for(let i in up) {
                 if(parseInt(up[i]) > parseInt(current[i])) {
-                    let str = 'A new version of ' + self.getName() + ' plugin is available, <a href="https://raw.githubusercontent.com/Nosphere/BeamPlugin/master/Beam.plugin.js" download>Download v' + data.version + '</a>';
-                        str += '<h3 class="h3">Changes:</h3><ul>';
+                    let str = 'A new version of ' + this.getName() + ' plugin is available, <a href="' + this.github.replace('{{FILE}}', this.getName() + '.plugin.js') + '" download>Download v' + data.version + '</a>';
+                        str += '<h3 class="h5">To Do:</h3><ul>';
+                    for(let n in data.notes.todo) {
+                        str += '<li>' + data.notes.todo[n] + '</li>';
+                    }
+                        str += '</ul><h3 class="h5">Changes:</h3><ul>';
                     for(let n in data.notes.changes) {
                         str += '<li>' + data.notes.changes[n] + '</li>';
                     }
@@ -59,508 +55,559 @@ var Beam = function()
                     alert(str);
                 }
             }
-        }).fail(function(err) {
-            trace(err);
+        }).fail((err) => {
+            this.trace('Update check failed:', err);
             alert('Failed to check for updates!');
         });
-    };
+    }
 
     /**
-     * Save Plugin configuration
+     * Create a toggle checkbox using Discord UI
+     * @param string    title     Title for the toggle
+     * @param boolean   checked   Toggle ON or offline
+     * @param function  callback  Callback function on toggle event
      */
-    function save() {
-        bdPluginStorage.set(self.getName(), 'config', CONFIG);
-    };
+    Toggle(title, checked, callback) {
+        let container = $('<div/>', {'class': 'ui-flex flex-horizontal'}),
+            text      = $('<h3 />', {'class': 'ui-form-title h3 ui-flex-child'}),
+            label     = $('<label/>', {'class': 'ui-switch-wrapper ui-flex-child'}),
+            checkbox  = $('<input/>', {'class': 'ui-switch-checkbox', 'type': 'checkbox', 'checked': checked}),
+            button    = $('<div/>', {'class': 'ui-switch'});
 
-    /**
-     * Load Plugin configuration
-     * @return Object
-     */
-    function load() {
-        return bdPluginStorage.get(self.getName(), 'config') || CONFIG;
-    };
-
-    /**
-     * Shorthand function for Core.prototype.alert
-     * @param string message
-     */
-    function alert(message) {
-        Core.prototype.alert(self.getName() + ' Plugin', '<div style="font-weight: normal;">' + message + '</div>');
-    };
-
-    /**
-     * Shorthand function for console.log
-     * @param mixed message
-     */
-    function trace(message) {
-        if(typeof(message) == 'string') {
-            console.log('%c[' + self.getName() + ']: ' + message, 'color: #3498db;');
-        } else {
-            console.log('%c[' + self.getName() + ']: ', 'color: #3498db;', message);
+        if(callback !== undefined) {
+            checkbox.on('change', callback);
         }
-    };
+
+        return container.append(text.text(title), label.append(checkbox, button));
+    }
 
     /**
-     * Attaches the beam logo button toe the discord header
+     * Creates a message card using Discord UI
+     * @param object user Object containing user data
      */
-    function attachButton() {
-        let logo = (CONFIG.active == true) ? BeamLogoActive : ((theme() == 'dark') ? BeamLogoWhite : BeamLogoBlack);
-        let btn = $('<button/>', {'id': 'beam-button', 'type': 'button', 'css': {'order': '-1'}});
-        let img = $('<span/>', {'id': 'beam-logo'}).css({'background-image': 'url("data:image/svg+xml;base64,' + logo + '")'});
-
-        btn.on('click', (evt) => {
-            let el = $(evt.currentTarget);
-            if(el.hasClass('popout-open')) {
-                ClosePopup();
-            } else {
-                OpenPopup(el);
-            }
-            el.toggleClass('popout-open');
+    Card(user) {
+        let container = $('<div/>', {'class': 'channel-members message-group hide-overflow', 'css': {'max-width': '100%', 'cursor': 'pointer'}}),
+            avatar    = $('<div/>', {'class': 'avatar-small', 'css': {'background-image': 'url("' + user.avatar + '")'}}),
+            status    = $('<div/>', {'class': 'status status-' + ((user.online) ? 'online' : 'invisible')}),
+            comment   = $('<div/>', {'class': 'comment'}),
+            title     = $('<div/>', {'class': 'message'}),
+            buttons   = $('<div/>', {'class': 'action-buttons'}),
+            remove    = $('<span/>', {'class': 'close-button'});
+            clr       = (user.featured === true) ? 'color: #1FBAED' : '';
+        title.html('<div class="body"><h2><span class="username-wrapper"><strong class="user-name" style="font-size: 110%;' + clr + '">' + user.name + '</strong></span><span class="timestamp">' + user.audience + '</span></h2><div class="message-text"><div class="markup">' + user.title + '</div></div></div>');
+        return container.append(
+            avatar.append(status),
+            comment.append(title),
+            buttons.append(remove.on('click', (evt) => {
+                container.remove();
+                delete this.config.users[user.name];
+                this.config = {save: $.now()};
+            }))
+        ).on('click', (evt) => {
+            console.log(user);
+            this.attach(user.id);
+            this.popout.detach();
         });
-
-        $('.header-toolbar').prepend(btn.append(img));
-    };
+    }
 
     /**
-     * Removes beam logo button
+     * Create an input field using Discord UI
+     * @param string    placeholder  Placeholder text
+     * @param function  callback     Callback function called ONKEYUP
      */
-    function detachButton() {
-        if($('#beam-button')[0] != undefined) {
-            $('#beam-button').remove();
+    Input(placeholder, callback) {
+        let container = $('<div/>', {'class': 'search-bar-icon ui-flex flex-horizontal', 'css': {'flex': '0 0 0%', 'width': 'auto', 'margin': '7px 5px 7px 13px'}}),
+            input     = $('<input/>', {'class': 'ui-input-button default', 'css': {'flex': '1 1 auto', 'font-weight': 'inherit', 'font-size': 'inherit', 'padding-left': '6px', 'margin-right': '13px', 'color': ((this.theme == 'dark') ? 'rgba(255,255,255, 0.7)' : 'rgba(0,0,0, 0.7)')}, 'placeholder': placeholder});
+
+        if(callback !== undefined) {
+            input.on('keyup', callback);
         }
-    };
+        return container.append(input);
+    }
 
     /**
-     * Update beam logo on activation or theme change.
-     */
-    function updateButton() {
-        if(ENABLED == true) {
-            if($('#beam-button')[0] != undefined) {
-                let logo = (CONFIG.active == true) ? BeamLogoActive : ((theme() == 'dark') ? BeamLogoWhite : BeamLogoBlack);
-                $('#beam-logo').css({'background-image': 'url("data:image/svg+xml;base64,' + logo + '")'});
-            } else {
-                attachButton();
-            }
-        }
-    };
-
-    /**
-     * Attaches the beam chat (and video if enabled) IFRAME to discord
+     * Attaches mixer embed container
      * @param int id
      */
-    function attachBeam(id) {
-        CONFIG.last = id || CONFIG.last;
-        if(CONFIG.active && $('#beam-container')[0] == undefined) {
-            let container = $('.content');
-            let logo = $('<div/>', {'css': {'flex': '0 0 0%', 'min-height': '40px', 'background-repeat': 'no-repeat', 'background-attachement': 'fixed', 'background-position': 'center', 'background-color': '#0D1529', 'background-image': 'url("data:image/svg+xml;base64,' + BeamLogoText + '")'}});
-            let wrapper = $('<div/>', {'id': 'beam-container', 'class': 'ui-flex flex-vertical'});
-            let frame = $('<iframe/>', {'id': 'beam-chat', 'css': {'flex': '1'}});
-            frame.attr('src', 'https://beam.pro/embed/chat/' + CONFIG.users[CONFIG.last].id);
-            wrapper.append(logo.html('<a href="https://beam.pro/' + CONFIG.last + '" target="_blank" style="position:relative; display:block; width:100%; height:100%;">&nbsp;</a>'), frame);
-            container.append(wrapper);
-            if(CONFIG.video) {
-                toggleVideo();
+    attach(id) {
+        this.config.last = id || this.config.last;
+        if(this.config.active) {
+            $('.content').append(this.mixer);
+            this.chat = this.config.last;
+            if(this.config.video) {
+                this.mixer.append(this.video);
+                this.video = this.config.last;
             }
-        } else if(CONFIG.active && $('#beam-container')[0] != undefined) {
-            $('#beam-chat').attr('src', 'https://beam.pro/embed/chat/' + CONFIG.users[CONFIG.last].id);
-            if($('#beam-video')[0] != undefined) {
-                $('#beam-video').attr('src', 'https://beam.pro/embed/player/' + CONFIG.users[CONFIG.last].id);
-            }
-        } else {
-
-        }
-    };
-
-    /**
-     * Remove beam IFRAME from discord
-     */
-    function detachBeam() {
-        $('#beam-container').remove();
-    };
-
-    /**
-     * Attach or detach video IFRAME to/from discord
-     */
-    function toggleVideo() {
-        if($('#beam-container')[0] != undefined) {
-            if($('#beam-video')[0] != undefined) {
-                $('#beam-video').remove();
-            } else {
-                let frame = $('<iframe/>', {'id': 'beam-video', 'css': {'height': '25%'}});
-                frame.attr('src', 'https://beam.pro/embed/player/' + CONFIG.last);
-                $('#beam-container').append(frame);
-            }
-        }
-    };
-
-    /**
-     * Searches for an user using Beam API
-     * @param string name
-     * @param jQuery el
-     */
-    function searchUser(name, el) {
-        if(CONFIG.users[name] == undefined) {
-            let o = el.css('outline-color'); el.css('outline-color', '#f1c40f');
-            let url = beamApi.replace('@s', name);
-            $.get(url, (data) => {
-            }, 'json').done((data) => {
-                if(data.length == 0) {
-                    alert('Failed to find user ' + name);
-                    el.css('outline-color', '#e74c3c');
-                } else {
-                    addUser(data[0]);
-                    el.css('outline-color', '#2ecc71');
-                }
-            }).fail((err) => {
-                trace(err);
-            });
-
-            setTimeout(() => {
-                el.css('outline-color', o).val('');
-            }, 2200);
-        }
-    };
-
-    /**
-     * Add a user to the CONFIG.users object
-     * @param Object
-     */
-    function addUser(user) {
-        if(CONFIG.users[user.user.username] == undefined) {
-            CONFIG.users[user.user.username] = {
-                id: user.id,
-                name: user.user.username,
-                avatar: user.user.avatarUrl || 'https://beam.pro/_latest/assets/images/main/avatars/default.jpg',
-                title: user.name,
-                online: user.online,
-                partner: user.partnered,
-                featured: user.featured
-            };
-
-            if($('#beam-popout-scroller')[0] != undefined) {
-                ListUsers($('#beam-popout-scroller'));
-            }
-            trace('Added user ' + user.user.username);
-            save();
-        }
-    };
-
-    /**
-     * Remove user from CONFIG.users object
-     * @param string name
-     */
-    function removeUser(name) {
-        if(CONFIG.users[name] != undefined) {
-            delete CONFIG.users[name];
-            if($('#beam-popout-scroller')[0] != undefined) {
-                ListUsers($('#beam-popout-scroller'));
-            }
-            trace('Removed user ' + name);
-            save();
-        }
-    };
-
-    /**
-     * Check all users status
-     */
-    function updateUsers() {
-        trace('Checking online status');
-        let users = Object.keys(CONFIG.users).join(';');
-        let url = beamApi.replace('@s', users);
-        $.get(url, (data) => {
-            for(var i in data) {
-                if(data[i] == undefined) {
-                    trace(data);
-                }
-                CONFIG.users[data[i].user.username].avatar = data[i].user.avatarUrl || 'https://beam.pro/_latest/assets/images/main/avatars/default.jpg';
-                CONFIG.users[data[i].user.username].title = data[i].name;
-                CONFIG.users[data[i].user.username].online = data[i].online;
-                CONFIG.users[data[i].user.username].featured = data[i].featured;
-                CONFIG.users[data[i].user.username].partner = data[i].partnered;
-            }
-        }, 'json').fail((err) => {
-            trace('Failed to update users status');
-        });
-    };
-
-    // ---------------------------------------------------------------------- //
-    // Discord UI methods                                                     //
-    // ---------------------------------------------------------------------- //
-    /**
-     * Tries to get used discord theme
-     * @return string
-     */
-    function theme() {
-        if($('div[class*="theme-"]:not(".app")')[0] == undefined) {
-            return 'dark';
-        } else {
-            return $('div[class*="theme-"]:not(".app")').attr('class').replace('theme-', '');
-        }
-    };
-
-    /**
-     * Open plugin popup
-     * @param jQuery el
-     */
-    function OpenPopup(el) {
-        let popout = Popup('Streamers', 'beam-popout');
-        $('div[class*="theme-"]:not(".app")').append(popout);
-        popout.css({
-            top: el.offset().top + el.height(),
-            left: el.offset().left - (popout.width() - el.width())
-        });
-        $('.app').on('mouseup', ClosePopup);
-    };
-
-    /**
-     * Close plugin popup
-     */
-    function ClosePopup() {
-        $('#beam-popout').remove();
-        $('.app').off('mouseup', ClosePopup);
-        $('#beam-button').removeClass('popout-open');
-        save();
-    };
-
-    /**
-     * Creates a popup element using disocrd theme
-     * @param string title
-     * @param string id
-     * @return jQuery
-     */
-    function Popup(title, id) {
-        id = id || self.getName() + '-popup-container';
-        let container = $('<div/>', {'id': id, 'class': 'popout popout-bottom-right no-arrow no-shadow', 'css': {}});
-        let wrapper = $('<div/>', {'class': 'messages-popout-wrap themed-popout undefined', 'css': {'max-height': '480px'}});
-        let header = $('<div/>', {'class': 'header'})
-        let text = $('<div/>', {'class': 'title'}).text(title);
-        let controls = $('<div/>', {'class': 'ui-flex flex-horizontal', 'css': {'flex': '0 0 0%', 'margin': '13px 20px 0px 13px'}});
-        let thm = (theme() == 'dark') ? 'dark' : '';
-        let scrollerWrap = $('<div/>', {'class': 'scroller-wrap ' + thm});
-        let scroller = $('<div/>', {'id': id + '-scroller', 'class': 'scroller messages-popout'});
-
-        let search = Input((e) => {
-            if(e.which == 13) {
-                let name = $(e.target).val();
-                searchUser(name, $(e.target));
-            }
-        });
-
-        let enable = Toggle('Enable', CONFIG.active, (e) => {
-            CONFIG.active = e.target.checked;
-            if(CONFIG.active) {
-                attachBeam();
-            } else {
-                detachBeam();
-            }
-
-            updateButton();
-        });
-
-        let video = Toggle('Video', CONFIG.video, (e) => {
-            CONFIG.video = e.target.checked;
-            toggleVideo();
-        });
-
-        let offline = Toggle('Offline', CONFIG.offline, (e) => {
-            CONFIG.offline = e.target.checked;
-            ListUsers(scroller);
-        });
-
-        ListUsers(scroller);
-        wrapper.append(
-            header.append(text),
-            search,
-            controls.append(enable, video, offline),
-            scrollerWrap.append(scroller)
-        );
-        container.append(wrapper);
-        return container;
-    };
-
-    /**
-     * Builds the user cards for the popout
-     * @param jQuery el
-     */
-    function ListUsers(el) {
-        console.log(el.children().length);
-        if(el.children().length > 0) {
-            el.empty();
-        }
-
-        if(Object.keys(CONFIG.users).length > 0) {
-            for(name in CONFIG.users) {
-                if(CONFIG.offline == true) {
-                    if(CONFIG.users[name].online == false) {
-                        continue;
-                    }
-                }
-                el.append(Card(CONFIG.users[name]));
-            }
-        } else {
-            el.html('<div class="empty-placeholder"><div class="body">You have no streamers added... yet.</div></div>');
         }
     }
 
     /**
-     * Creates a textbox input using discord style
-     * @param function callback
+     * Removes the mixer container
      */
-    function Input(callback) {
-        let container = $('<div/>', {'class': 'search-bar-icon ui-flex flex-horizontal', 'css': {'flex': '0 0 0%', 'width': 'auto', 'margin': '10px 20px 0px 13px'}});
-        let clr = (theme() == 'dark') ? 'rgba(255,255,255, 0.7)' : 'rgba(0,0,0, 0.7)';
-        let input = $('<input/>', {'id': 'beam-search-streamer', 'placeholder': 'Search...', 'class': 'ui-input-button default', 'css': {'flex': '1 1 auto', 'font-weight': 'inherit', 'font-size': 'inherit', 'color': clr, 'padding-left': '5px'}});
-        if(callback != undefined) {
-            input.on('keyup', callback);
-        }
-
-        container.append(input);
-        return container;
-    };
+    detach() {
+        this.mixer.remove();
+    }
 
     /**
-     * Creates a toggle using discord theme
-     * @param string title
-     * @param bool checked
-     * @param function callback
+     * Search for a user
+     * @param string name Username to search for
+     * @param jQuery el   Text Input jQuery element
      */
-    function Toggle(title, checked, callback) {
-        checked = checked || false;
-        let container = $('<div/>', {'class': 'ui-flex flex-horizontal', 'css': {'flex': '1 1 100%'}});
-        let text = $('<h3/>', {'class': 'ui-form-title h3 ui-flex-child'}).text(title);
-        let label = $('<label/>', {'class': 'ui-switch-wrapper ui-flex-child'});
-        let checkbox = $('<input/>', {'type': 'checkbox', 'checked': checked, 'class': 'ui-switch-checkbox'});
-        let button = $('<div/>', {'class': 'ui-switch'});
-
-        if(callback != undefined) {
-            checkbox.on('change', callback);
+    search(name, el) {
+        if(this.config.users[name] !== undefined) {
+            return;
         }
 
-        label.append(checkbox, button);
-        container.append(text, label);
+        let url = this.api.replace('{{NAME}}', name).replace('{{FIELDS}}', 'id,name,online,audience,featured,partnered,user,type');
+        $.get(url, {cached: $.now()}, (data) => {
+            if(data.length <= 0) {
+                if(el !== undefined) {
+                    el.css('outline-color', '#e74c3c').val('Failed to find ' + name);
+                }
+                this.trace('Failed to get user data!', err);
+            } else {
+                let user = {
+                    id: data[0].id,
+                    name: data[0].user.username,
+                    title: data[0].name,
+                    audience: data[0].audience,
+                    featured: data[0].featured,
+                    partnered: data[0].partnered,
+                    online: data[0].online,
+                    avatar: data[0].user.avatarUrl
+                }
+                this.config = {users: {[name]: user}};
+                if(el !== undefined) {
+                    el.css('outline-color', '#2ecc71');
+                }
 
-        return container;
-    };
-
-    /**
-     * Create a user card using discord theme
-     * @param object user
-     */
-    function Card(user) {
-        let online = (user.online == true) ? 'online' : 'invisible';
-        let container = $('<div/>', {'data-id': user.name, 'class': 'channel-members message-group hide-overflow', 'css': {'max-width': '100%', 'cursor': 'pointer'}});
-        let avatar = $('<div/>', {'class': 'avatar-small', 'css': {'background-image': 'url("' + user.avatar + '")'}});
-        let status = $('<div/>', {'class': 'status status-' + online});
-        let comment = $('<div/>', {'class': 'comment'});
-        let text = $('<div/>', {'class': 'message'});
-        let buttons = $('<div/>', {'class': 'action-buttons'});
-        let btnDelete = $('<span/>', {'class': 'close-button'}).click(() => { removeUser(user.name) });
-        let nameColor = null;
-
-        if(user.partner == true) {
-            let partner = $('<div/>', {'class': 'jump-button', 'css': {'background': '#8150EF', 'color': 'white'}}).text('Partner');
-            buttons.prepend(partner);
-        }
-
-        if(user.featured == true) {
-            nameColor = 'color: #f1c40f;';
-            let feat = $('<div/>', {'class': 'jump-button', 'css': {'background': '#f1c40f', 'color': 'white'}}).text('Featured');
-            buttons.prepend(feat);
-        }
-
-        text.html('<div class="body"><h2><span class="username-wrapper"><strong class="user-name" style="' + nameColor + '">' + user.name + '</strong></span><span class="timestamp"><a href="http://beam.pro/' + user.name + '" target="_blank">beam.pro</a></h2><div class="message-text"><div class="markup">' + user.title + '</div></div></div>');
-        avatar.append(status);
-        comment.append(text);
-        buttons.append(btnDelete);
-        container.append(avatar, comment, buttons);
-
-        comment.on('mouseup', (e) => {
-            CONFIG.last = user.name;
-            ClosePopup();
-            attachBeam();
+                $('#mixer-users').prepend(this.Card(user));
+            }
+        }, 'json').fail((err) => {
+            if(el !== undefined) {
+                el.css('outline-color', '#e74c3c').val('Failed to find ' + name);
+            }
+            this.trace('Failed to get user data!', err);
         });
 
-        return container;
-    };
+        if(el !== undefined) {
+            setTimeout(() => {
+                el.css('outline-color', 'initial').val('');
+            }, 2300);
+        }
+    }
 
-    // ---------------------------------------------------------------------- //
-    // Better Discord event methods                                           //
-    // ---------------------------------------------------------------------- //
-    this.observer = (evt) => {
-        updateButton();
-        if(CONFIG.active) {
-            if($('#beam-container')[0] == undefined && $('.content')[0] != undefined) {
-                attachBeam();
+    /**
+     * Checks user status changes, default interval is 5min we don't want to spam mixer servers
+     */
+    check() {
+        let users = Object.keys(this.config.users);
+        if(users.length <= 0) {
+            return;
+        }
+
+        let url = this.api.replace('{{NAME}}', users.join(';')).replace('{{FIELDS}}', 'name,online,featured,partnered,user');
+        $.get(url, {cached: $.now()}, (data) => {
+            this.trace("Status check:", data);
+            for(let i in data) {
+                let user = data[i];
+                this.config = {users: {[user.user.name]: {
+                    title: data.name,
+                    online: data.online,
+                    featured: data.featured,
+                    partnered: data.partnered
+                }}};
             }
+        }, 'json').fail((err) => {
+            this.trace('Failed to check user status!', err);
+        });
+    }
+
+    /**
+     * Creates user cards in the popout
+     */
+    list() {
+        let el = $('#mixer-users');
+        if(el.children().length > 0) {
+            el.empty();
         }
-    };
-
-    this.load = () => {
-        updateCheck();
-        CONFIG = $.extend({}, CONFIG, load());
-    };
-
-    this.unload = () => {
-
-    };
-
-    this.start = () => {
-        attachButton();
-        updateCallback = setInterval(updateUsers, updateInterval);
-        if(CONFIG.active) {
-            attachBeam();
+        for(let i in this.config.users) {
+            let user = this.config.users[i];
+            if(this.config.offline === true && user.online === false) {
+                continue;
+            }
+            el.append(this.Card(user));
         }
-        ENABLED = true;
-    };
+    }
+    // #endregion
 
-    this.stop = () => {
-        detachButton();
-        if(updateCallback != null) {
-            clearInterval(updateCallback);
-            updateCallback = null;
+    // #region Property Getters and Setters
+    /**
+     * @return object Returns the configuration object
+     */
+    get config() {
+        if(this._config === undefined) {
+            this._config = $.extend({
+                active: false,
+                offline: false,
+                video: false,
+                last: null,
+                users: {}
+            }, bdPluginStorage.get(this.getName(), 'config'));
         }
-        ENABLED = false;
-        save();
-    };
+        return this._config;
+    }
 
     /**
-     * @return string
+     * Set or modify a configuration property
+     *
+     * ```js
+     * this.config = {active: true} // will set active to true
+     * ```
+     * @param object o Object of the configuration proerties and values
      */
-    this.getName = () => {
-        return 'Beam';
-    };
+    set config(o) {
+        if(typeof(o) !== 'object') {
+            return this.trace('Invalid value for config setter expecting a object type, [' + typeof(o) + '] recieved!');
+        }
+
+        if(o.hasOwnProperty('users')) {
+            this.config.users = $.extend(this.config.users, o.users);
+            delete o.users;
+        }
+
+        this._config = $.extend(this.config, o);
+        bdPluginStorage.set(this.getName(), 'config', this._config);
+    }
 
     /**
-     * @return string
+     * @return string github URL for update check
      */
-    this.getDescription = () => {
-        return 'Attaches beam.pro chat and video into discord.';
-    };
+    get github() {
+        return 'https://raw.githubusercontent.com/Nosphere/Mixer-Plugin/master/{{FILE}}?now=1496035380197';
+    }
 
     /**
-     * @return string
+     * @return string Mixer api url
      */
-    this.getAuthor = () => {
-        return 'Ve';
-    };
+    get api() {
+        return 'https://mixer.com/api/v1/channels?where=token:in:{{NAME}}&fields={{FIELDS}}';
+    }
 
     /**
-     * @return string
+     * @return string Mixer embed url
      */
-    this.getVersion = () => {
-        return VERSION;
-    };
+    get embed() {
+        return 'https://mixer.com/embed/{{EMBED}}/{{ID}}';
+    }
 
-    // ---------------------------------------------------------------------- //
-    // CONSTANTS                                                              //
-    // ---------------------------------------------------------------------- //
-    const self = this;
-    const GITHUB = 'https://raw.githubusercontent.com/Nosphere/BeamPlugin/master/version.json';
-    const beamApi = 'https://beam.pro/api/v1/channels?where=token:in:@s&fields=id,name,online,partnered,featured,user';
-    const BeamLogoWhite = 'PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4NCjwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAyMS4wLjAsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiA2LjAwIEJ1aWxkIDApICAtLT4NCjxzdmcgdmVyc2lvbj0iMS4xIiBpZD0iTGF5ZXJfMSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgeD0iMHB4IiB5PSIwcHgiDQoJIHZpZXdCb3g9IjAgMCAxMTYgMTE2IiBzdHlsZT0iZW5hYmxlLWJhY2tncm91bmQ6bmV3IDAgMCAxMTYgMTE2OyIgeG1sOnNwYWNlPSJwcmVzZXJ2ZSI+DQo8c3R5bGUgdHlwZT0idGV4dC9jc3MiPg0KCS5zdDB7ZmlsbDojRkZGRkZGO30NCjwvc3R5bGU+DQo8cGF0aCBjbGFzcz0ic3QwIiBkPSJNNTgsOEMzMC4zODU3NjcsOCw4LDMwLjM4NTc2MSw4LDU4czIyLjM4NTc2Nyw1MCw1MCw1MHM1MC0yMi4zODU3NjUsNTAtNTBTODUuNjE0MjQzLDgsNTgsOHoNCgkgTTEwNC44MjQyNTcsNjIuMDg1NTk0QzgxLjExOTY5LDUzLjc3OTEyOSw2Mi4yNTQyNjUsMzQuOTc2OTMzLDUzLjkxNDAzMiwxMS4xNzU3NzYNCglDODMuMDI5MTIxLDguNjY4MzM4LDEwNy4zMzMxOTEsMzIuOTQ5NjA4LDEwNC44MjQyNTcsNjIuMDg1NTk0eiBNNDMuODU3ODY4LDQzLjg1Nzg2OA0KCWM3LjgxMDQ4Ni03LjgxMDQ5MywyMC40NzM3ODItNy44MTA0OTMsMjguMjg0MjY3LDBzNy44MTA0ODYsMjAuNDczNzgyLDAsMjguMjg0MjY3cy0yMC40NzM3ODIsNy44MTA0ODYtMjguMjg0MjY3LDANCglTMzYuMDQ3MzgyLDUxLjY2ODM1NCw0My44NTc4NjgsNDMuODU3ODY4eiBNMTEuMTc1NzY5LDUzLjkxNDA5M2MyMy43MDUzMjYsOC4zMDY2NzUsNDIuNTY5NTYxLDI3LjEwOTA0Nyw1MC45MDk4NTUsNTAuOTEwMTY0DQoJQzMyLjkzNDY5NiwxMDcuMzM0NTg3LDguNjY5NjE1LDgzLjAxNTQyNywxMS4xNzU3NjksNTMuOTE0MDkzeiIvPg0KPC9zdmc+';
+    /**
+     * @return jQuery returns embed container element as jQuery object
+     */
+    get mixer() {
+        if(this._mixer === undefined) {
+            this.mixer = this.config.last;
+        }
+        return this._mixer;
+    }
 
-    const BeamLogoBlack = 'PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4NCjwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAyMS4wLjAsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiA2LjAwIEJ1aWxkIDApICAtLT4NCjxzdmcgdmVyc2lvbj0iMS4xIiBpZD0iTGF5ZXJfMSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgeD0iMHB4IiB5PSIwcHgiDQoJIHZpZXdCb3g9IjAgMCAxMTYgMTE2IiBzdHlsZT0iZW5hYmxlLWJhY2tncm91bmQ6bmV3IDAgMCAxMTYgMTE2OyIgeG1sOnNwYWNlPSJwcmVzZXJ2ZSI+DQo8cGF0aCBkPSJNNTgsOEMzMC4zODU3NjcsOCw4LDMwLjM4NTc2MSw4LDU4czIyLjM4NTc2Nyw1MCw1MCw1MHM1MC0yMi4zODU3NjUsNTAtNTBTODUuNjE0MjQzLDgsNTgsOHogTTEwNC44MjQyNTcsNjIuMDg1NTk0DQoJQzgxLjExOTY5LDUzLjc3OTEyOSw2Mi4yNTQyNjUsMzQuOTc2OTMzLDUzLjkxNDAzMiwxMS4xNzU3NzZDODMuMDI5MTIxLDguNjY4MzM4LDEwNy4zMzMxOTEsMzIuOTQ5NjA4LDEwNC44MjQyNTcsNjIuMDg1NTk0eg0KCSBNNDMuODU3ODY4LDQzLjg1Nzg2OGM3LjgxMDQ4Ni03LjgxMDQ5MywyMC40NzM3ODItNy44MTA0OTMsMjguMjg0MjY3LDBzNy44MTA0ODYsMjAuNDczNzgyLDAsMjguMjg0MjY3DQoJcy0yMC40NzM3ODIsNy44MTA0ODYtMjguMjg0MjY3LDBTMzYuMDQ3MzgyLDUxLjY2ODM1NCw0My44NTc4NjgsNDMuODU3ODY4eiBNMTEuMTc1NzY5LDUzLjkxNDA5Mw0KCWMyMy43MDUzMjYsOC4zMDY2NzUsNDIuNTY5NTYxLDI3LjEwOTA0Nyw1MC45MDk4NTUsNTAuOTEwMTY0QzMyLjkzNDY5NiwxMDcuMzM0NTg3LDguNjY5NjE1LDgzLjAxNTQyNywxMS4xNzU3NjksNTMuOTE0MDkzeiIvPg0KPC9zdmc+';
+    /**
+     * Creates mixer embed container and sets chat and video IDs
+     * @param int id User id to embed
+     */
+    set mixer(id) {
+        this.config.last = id || this.config.last;
+        if(this._mixer === undefined) {
+            let container = $('<div/>', {'class': 'ui-flex flex-vertical', 'id': 'mixer-container'}),
+                logo      = $('<div/>', {'css': {'min-height': '32px', 'flex': '0 0 0%', 'background-repeat': 'no-repeat', 'background-attachement': 'fixed', 'background-position': 'center', 'background-color': '#141828', 'background-image': 'url("data:image/svg+xml;base64,' + this.mixerText + '")'}});
 
-    const BeamLogoActive = 'PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4NCjwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAyMS4wLjAsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiA2LjAwIEJ1aWxkIDApICAtLT4NCjxzdmcgdmVyc2lvbj0iMS4xIiBpZD0iTGF5ZXJfMSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgeD0iMHB4IiB5PSIwcHgiDQoJIHZpZXdCb3g9IjAgMCAxMTYgMTE2IiBzdHlsZT0iZW5hYmxlLWJhY2tncm91bmQ6bmV3IDAgMCAxMTYgMTE2OyIgeG1sOnNwYWNlPSJwcmVzZXJ2ZSI+DQo8c3R5bGUgdHlwZT0idGV4dC9jc3MiPg0KCS5zdDB7ZmlsbDojODE1MEVGO30NCgkuc3Qxe2ZpbGw6IzREOTBGNDt9DQoJLnN0MntmaWxsOiMyRjJGNUQ7fQ0KCS5zdDN7ZmlsbDojRkZGRkZGO30NCgkuc3Q0e2ZpbGw6IzNGNjFCNzt9DQoJLnN0NXtmaWxsOiM1NjMxQzA7fQ0KCS5zdDZ7ZmlsbDojQjVCNUM0O30NCjwvc3R5bGU+DQo8Zz4NCgk8cGF0aCBjbGFzcz0ic3QwIiBkPSJNNDIuMzEzNTQ1LDczLjY5MzQxM2M5LjM1NTEyOSw5LjM1NTI1NSwxNi4xMjk3OTEsMjAuMzczMjMsMjAuMTA3MDU5LDMyLjExMTQwNA0KCQljMjIuOTgxMjA1LTIuMDk4NTg3LDQxLjI3ODU5MS0yMC4zOTU4NTksNDMuMzc3MzY5LTQzLjM3NzAwM2MtMTEuNzM4MjA1LTMuOTc3MjkxLTIyLjc1Njc5OC0xMC43NTE5MTktMzIuMTEyLTIwLjEwNzIzOQ0KCQlMNDIuMzEzNTQ1LDczLjY5MzQxM3oiLz4NCgk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNNzMuNjg1OTc0LDQyLjMyMDU3NmwtMC4wMDAwMDgtMC4wMDAwMDRjLTkuMzU1MTQ4LTkuMzU1Mjc0LTE2LjEyOTU2Mi0yMC4zNzM4NS0yMC4xMDY4LTMyLjExMjExOA0KCQljLTIyLjk4MTI0MywyLjA5ODU1Mi00MS4yNzg2ODcsMjAuMzk1ODQ3LTQzLjM3NzQ3Miw0My4zNzcwMjljMTEuNzM4MjEsMy45NzczNDEsMjIuNzU2NjI2LDEwLjc1MjU3NSwzMi4xMTE4NTEsMjAuMTA3OTIyDQoJCXYwLjAwMDAwOEw3My42ODU5NzQsNDIuMzIwNTc2eiIvPg0KCQ0KCQk8ZWxsaXBzZSB0cmFuc2Zvcm09Im1hdHJpeCgwLjcwNzEwMiAtMC43MDcxMTEgMC43MDcxMTEgMC43MDcxMDIgLTI0LjAyOTQwNiA1OC4wMDI0MDMpIiBjbGFzcz0ic3QyIiBjeD0iNTcuOTk5NzUyIiBjeT0iNTguMDA2OTk2IiByeD0iMjIuMDQyMDM4IiByeT0iMjIuMDQyMDM4Ii8+DQoJPHBhdGggY2xhc3M9InN0MyIgZD0iTTYyLjQyNDA0OSwxMDUuODA0NDg5QzU0LjE2OTIyLDgxLjI4MjAzNiwzNC43NzA2MTUsNjEuODUyMDQ3LDEwLjIwMjAyNiw1My41ODIwMTINCgkJQzcuNDY2OTEyLDgzLjUwNzA4LDMyLjQ3OTA2OSwxMDguNTQxMTk5LDYyLjQyNDA0OSwxMDUuODA0NDg5eiIvPg0KCTxwYXRoIGNsYXNzPSJzdDQiIGQ9Ik01My45MTU3NzEsMTEuMTgyNDQ4Yy0wLjM0MTkwOC0wLjk2NzkyNi0wLjY2NDc0OS0xLjk0MDk0OC0wLjk2ODMxMS0yLjkxODU1NQ0KCQlDMjkuNDQ3NjQxLDEwLjU2MTM0NywxMC41NTc4NzMsMjkuNDI0MTI0LDguMjU3NDk4LDUyLjk1MzgwNGMwLjk3NzQ5OSwwLjMwMzUzNSwxLjk1MDQxNCwwLjYyNjM1LDIuOTE4MjM1LDAuOTY4MjM5DQoJCUMxMy4xMjk4OTcsMzEuMjIzNDIxLDMxLjIxNzA4NywxMy4xMzYzODUsNTMuOTE1NzcxLDExLjE4MjQ0OHoiLz4NCgk8cGF0aCBjbGFzcz0ic3QzIiBkPSJNNTMuNTc1NzI5LDEwLjIwODc4MmM4LjI1NDc5OSwyNC41MjI0NjEsMjcuNjUzMzU4LDQzLjk1MjQ0Miw1Mi4yMjE5MjQsNTIuMjIyNDk2DQoJCUMxMDguNTMyODUyLDMyLjUwNTcxOCw4My41MjAwMTIsNy40NzIyMDgsNTMuNTc1NzI5LDEwLjIwODc4MnoiLz4NCgk8cGF0aCBjbGFzcz0ic3Q1IiBkPSJNMTA3Ljc0MjM3OCw2My4wNTk1MTdjLTAuOTc3NTI0LTAuMzAzNTQ3LTEuOTUwNDc4LTAuNjI2MzY2LTIuOTE4MzI3LTAuOTY4MjYyDQoJCWMtMS45NTQxNzgsMjIuNjk4NTkzLTIwLjA0MTMxMyw0MC43ODU1OTktNDIuNzM5OTU2LDQyLjczOTU3OGMwLjM0MTkyNywwLjk2Nzk0MSwwLjY2NDc4LDEuOTQwOTg3LDAuOTY4MzQ5LDIuOTE4NjE3DQoJCUM4Ni40NzM3NzgsMTA1LjQ1OTY5NCwxMDUuNDM0OTE0LDg2LjY2MzQxNCwxMDcuNzQyMzc4LDYzLjA1OTUxN3oiLz4NCgk8cGF0aCBjbGFzcz0ic3Q2IiBkPSJNMTA3Ljc0MjI2NCw2My4wNTk4NzJjMy4xNjI4OC0zMS41MTkwNi0yMy4yODU5MzQtNTcuOTU3NTItNTQuNzk0OTE0LTU0Ljc5NTYyNA0KCQljMC4zMDMzMjIsMC45ODA5MDEsMC42MjQ2ODcsMS45NTM5MTgsMC45NjMwMzksMi45MTg5OWMyOS4wNjk3NzUtMi41MDU2MjksNTMuNDI5MzI1LDIxLjcyNDU3MSw1MC45MTMxMDUsNTAuOTEzNjYyDQoJCUMxMDUuNzg4NDE0LDYyLjQzNTE3NywxMDYuNzYxMzQ1LDYyLjc1NjUzMSwxMDcuNzQyMjY0LDYzLjA1OTg3MnoiLz4NCgk8cGF0aCBjbGFzcz0ic3Q2IiBkPSJNNjMuMDUyNDQ0LDEwNy43NDk0NTFjLTAuMzAzMzMzLTAuOTgwOTE5LTAuNjI0MzIxLTEuOTU0MDAyLTAuOTYyNjg1LTIuOTE5MDk4DQoJCWMtMjkuMTIzNDMyLDIuNTEwNDI5LTUzLjQyNDk2MS0yMS43ODA5MjItNTAuOTEzNTM2LTUwLjkxNDAwOWMtMC45NjQ4ODItMC4zMzgyNjQtMS45Mzc4MzgtMC42NTkyMS0yLjkxODcyNi0wLjk2MjU0DQoJCUM1LjA5OTUzOSw4NC40MjQ3MTMsMzEuNDg2MjU4LDExMC45MTcxMTQsNjMuMDUyNDQ0LDEwNy43NDk0NTF6Ii8+DQo8L2c+DQo8L3N2Zz4NCg==';
-    const BeamLogoText = 'PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz48c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkxheWVyXzEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IiB2aWV3Qm94PSIwIDAgMzY2IDExNiIgc3R5bGU9ImVuYWJsZS1iYWNrZ3JvdW5kOm5ldyAwIDAgMzY2IDExNjsiIHhtbDpzcGFjZT0icHJlc2VydmUiPjxzdHlsZSB0eXBlPSJ0ZXh0L2NzcyI+LnN0MHtmaWxsOiNGRkZGRkY7fS5zdDF7ZmlsbDojODE1MEVGO30uc3Qye2ZpbGw6IzREOTBGNDt9LnN0M3tmaWxsOiMyRjJGNUQ7fTwvc3R5bGU+PHBhdGggY2xhc3M9InN0MCIgZD0iTTE3NS40NDk5OTcsMjRjLTkuNSwwLTQzLDAtNDMsMGw0LjUsMTEuOTAwMDAyaDIuODk5OTk0VjkyaDM2YzcuODk5OTk0LDAsMTIuMTAwMDA2LTQuMzAwMDAzLDEyLjEwMDAwNi0xMi40MDAwMDJWNjcuNWMwLTMuMzAwMDAzLTAuNjk5OTk3LTUuNS0yLjEwMDAwNi03Yy0xLjE5OTk5Ny0xLjI5OTk5OS0yLjg5OTk5NC0yLTUuMzAwMDAzLTIuMjk5OTk5bC01LjY5OTk5Ny0wLjc5OTk5OWw1LjMwMDAwMy0xLjI5OTk5OWM2LjM5OTk5NC0xLjQwMDAwMiw3LTUuNSw3LTkuNzAwMDAxYzAsMCwwLTQuOTAwMDAyLDAtMTAuNVMxODQuOTQ5OTk3LDI0LDE3NS40NDk5OTcsMjR6IE0xNzMuNjQ5OTk0LDc3LjVjLTAuMTAwMDA2LDEuNTk5OTk4LTEuMTAwMDA2LDIuNS0yLjY5OTk5NywyLjVoLTE2Ljg5OTk5NGwwLjEwMDAwNi0xNy4yOTk5OTljMCwwLDEzLjYwMDAwNiwwLDE2LjUsMHMzLDIuNDAwMDA1LDMsMi45OTk5OTZMMTczLjY0OTk5NCw3Ny41eiBNMTcyLjg0OTk5MSwzOC45MDAwMDJjMCwxLjc5OTk5OSwwLDEwLjA5OTk5OCwwLDEwLjA5OTk5OGMwLDEuNTk5OTk4LTAuODk5OTk0LDIuNTk5OTk4LTIuNSwyLjU5OTk5OGgtMTYuMTk5OTk3VjM1LjkwMDAwMmMwLDAsMTMuODk5OTk0LDAsMTUuODAwMDAzLDBDMTcxLjg0OTk5MSwzNS45MDAwMDIsMTcyLjg0OTk5MSwzNywxNzIuODQ5OTkxLDM4LjkwMDAwMnoiLz48cGF0aCBjbGFzcz0ic3QwIiBkPSJNMjQzLjU1MDAxOCw5MmwyMS43OTk5ODgtNTYuMDk5OTc2bDEwLjUsMjYuODk5OTYzaC0xM2wtNC4yMDAwMTIsMTEuMTAwMDM3aDIxLjVMMjg3LjI1MDAzMSw5MmgyMVY0NC4yMDAwMTJsMTYuMTk5OTUxLDI0LjA5OTk3Nmg1bDE2LjQwMDAyNC0yNC4wOTk5NzZWOTJoMTIuMDk5OTc2VjI0aC0xMmwtMTkuMDk5OTc2LDI4bC0xOC41LTI4SDI5NS43NjAwNHY1NS45MzY0MDFMMjczLjU1MDAxOCwyNGgtMTcuMjAwMDEybC0yMS42MTQ5OSw1Ni4wOTk5MTVMMjA0LjY0OTk5NCw4MGwtMC4wOTk5NzYtMTcuMjk5OTg4aDIzLjc5OTk4OFY1MS41OTk5NzZoLTIzLjkwMDAyNGwtMC4wOTk5NzYtMTUuNjk5OTUxaDMwLjI5OTk4OFYyNGgtMzljLTIuODk5OTYzLDAtNSwyLjA5OTk3Ni01LDQuOTAwMDI0Vjg1YzAsMy41OTk5NzYsMy4yOTk5ODgsNi43OTk5ODgsNi45MDAwMjQsN0gyNDMuNTUwMDE4eiIvPjxnPjxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik00Mi4zMTM1OTEsNzMuNjg2ODgyYzkuODcwMTEsOS44NzAyMzIsMTYuODY4NDE2LDIxLjU5MTEzMywyMC43Mzg5NzksMzQuMDU2MTE0YzIzLjY4MDQ3LTIuMzE1MTQsNDIuMzc1MDExLTIxLjAwOTMzMSw0NC42OTAxMDUtNDQuNjkwMTA1Qzk1LjI3Nzg0LDU5LjE4MjI3OCw4My41NTYzNTgsNTIuMTg0MDQ4LDczLjY4NjI0OSw0Mi4zMTM4Mkw0Mi4zMTM1OTEsNzMuNjg2ODgyeiIvPjxwYXRoIGNsYXNzPSJzdDIiIGQ9Ik03My42ODYyNDksNDIuMzEzODJsLTAuMDAwMDA4LTAuMDAwMDA4Yy05Ljg3MDEwNi05Ljg3MDIzNS0xNi44NjgxMy0yMS41OTE3Ny0yMC43Mzg2OTMtMzQuMDU2NzUxQzI5LjI2NzA3OCwxMC41NzIxOTUsMTAuNTcyNTI1LDI5LjI2NjM2OSw4LjI1NzQyMSw1Mi45NDcxNGMxMi40NjQ4MjEsMy44NzA2MTMsMjQuMTg2MDY4LDEwLjg2OTQ5OSwzNC4wNTYxNjgsMjAuNzM5NzM1djAuMDAwMDA4TDczLjY4NjI0OSw0Mi4zMTM4MnoiLz48ZWxsaXBzZSB0cmFuc2Zvcm09Im1hdHJpeCgwLjcwNzEwMiAtMC43MDcxMTEgMC43MDcxMTEgMC43MDcxMDIgLTI0LjAyNDY2IDU4LjAwMDU2OCkiIGNsYXNzPSJzdDMiIGN4PSI1Ny45OTk5MTYiIGN5PSI1OC4wMDAzNTEiIHJ4PSIyMi4wNDIxOTgiIHJ5PSIyMi4wNDIxOTgiLz48cGF0aCBjbGFzcz0ic3QwIiBkPSJNNTIuOTQ3NTQ4LDguMjU3MDYyYzguMDY3MzQxLDI2LjA4ODQwMiwyOC42NTQ0MTEsNDYuNzEyMTA5LDU0Ljc5NTEyOCw1NC43OTU4M0MxMTAuOTA3MDk3LDMxLjUxNzc3OCw4NC40Mzk1OSw1LjA5Njg4NSw1Mi45NDc1NDgsOC4yNTcwNjJ6Ii8+PHBhdGggY2xhc3M9InN0MCIgZD0iTTYzLjA1MjU3LDEwNy43NDI5OTZDNTQuOTg1MjM3LDgxLjY1NDU4NywzNC4zOTgxNCw2MS4wMzA4NjEsOC4yNTc0MjEsNTIuOTQ3MTRDNS4wOTE3MDIsODQuNDk1NDUzLDMxLjU3MTYyMywxMTAuOTAyMDMxLDYzLjA1MjU3LDEwNy43NDI5OTZ6Ii8+PC9nPjwvc3ZnPg==';
-};
+            this._mixer = container.append(logo, this.chat.attr('src', id));
+        } else {
+            this.chat.attr('src', id);
+            this.video.attr('src', id);
+        }
+    }
+
+    /**
+     * @return int Returns status check callback interval ID
+     */
+    get statusCheck() {
+        return (this._interval === undefined) ? false : this._interval;
+    }
+
+    /**
+     * Sets update check interval to {minutes}
+     * @param int minutes
+     */
+    set statusCheck(minutes) {
+        if(minutes === false) {
+            clearInterval(this.statusCheck);
+        } else if(this.statusCheck === false) {
+            minutes = minutes || 5;
+            minutes = (60 * 1000) * parseInt(minutes);
+            this._interval = setInterval(() => {
+                this.check()
+            }, minutes);
+        } else {
+            clearInterval(this.statusCheck);
+            this.statusCheck = minutes;
+        }
+    }
+
+    /**
+     * @return jQuery Popout parent element as jQuery object
+     */
+    get container()
+    {
+        if(this._container === undefined) {
+            this._container = $('#app-mount > * > div[class*="theme-"]');
+        }
+        return this._container;
+    }
+
+    /**
+     * @return jQuery Returns jQuery object for the video iframe
+     */
+    get video() {
+        if(this._video === undefined) {
+            this._video = $('<iframe/>', {'allowfullscreen': true, 'css': {'height': '25%'}});
+        }
+        return this._video;
+    }
+
+    /**
+     * Sets the url for the video embed
+     * @param int id User ID
+     */
+    set video(id) {
+        this.video.attr('src', this.embed.replace('{{EMBED}}', 'player').replace('{{ID}}', id));
+    }
+
+    /**
+     * @return jQuery Returns jQuery object for the chat iframe
+     */
+    get chat() {
+        if(this._chat === undefined) {
+            this._chat = $('<iframe/>', {'css': {'flex': '1'}});
+        }
+        return this._chat;
+    }
+
+    /**
+     * Sets the url for the chat embed
+     * @param int id User ID
+     */
+    set chat(id) {
+        this.chat.attr('src', this.embed.replace('{{EMBED}}', 'chat').replace('{{ID}}', id));
+    }
+
+
+    /**
+     * Get theme name
+     * @returns string Tries to get discord theme, LIGHT or DARK
+     */
+    get theme() {
+        let el = $('div[class*="theme-"]:not(".app")');
+        return (el[0] === undefined) ? 'dark' : el.attr('class').replace('theme-', '');
+    }
+
+    /**
+     * Get Discord toolbar element as jQuery object
+     * @return jQuery
+     */
+    get toolbar() {
+        if(this._toolbar === undefined) {
+            this._toolbar = $('.header-toolbar');
+        }
+        return $('.header-toolbar');
+    }
+
+    /**
+     * Get Button element as jQuery object
+     * @return jQuery
+     */
+    get button() {
+        if(this._button === undefined) {
+            let container = $('<button/>', {'id': 'mixer-button', 'type': 'button', 'css': {'order': '-1'}}),
+                img       = $('<span/>', {'css': {'background-image': 'url("data:image/svg+xml;base64,' + this.logo + '")'}});
+            this._button = container.append(img);
+        }
+        return this._button;
+    }
+
+    /**
+     * Set button image/icon
+     * @param string i Base64 SVG image string
+     */
+    set button(i) {
+        this.button.children().eq(0).css('background-image', 'url("data:image/svg+xml;base64,' + i + '")');
+    }
+
+    /**
+     * Get popout element as jQuery object
+     * @return jQuery
+     */
+    get popout() {
+        if(this._popout === undefined) {
+            this.popout = this.getName();
+        }
+        return this._popout;
+    }
+
+    /**
+     * Create popout element
+     * ```js
+     * this.popout = "Title"; // Will create the element if there is not one already
+     * ```
+     * @param string title
+     */
+    set popout(title) {
+        if(this._popout === undefined) {
+            let container = $('<div/>', {'class': 'popout'}),
+                wrapper   = $('<div/>', {'class': 'messages-popout-wrap themed-popout undefined'}),
+                header    = $('<div/>', {'class': 'header'}),
+                scrlWrap  = $('<div/>', {'class': 'scroller-wrap ' + ((this.theme == 'dark') ? 'dark' : ''), 'css': {'max-height': '385px'}}),
+                scroller  = $('<div/>', {'class': 'scroller messages-popout', 'id': 'mixer-users'}),
+                options   = $('<div/>', {'css': {'padding': '4px 13px 4px 13px', 'box-sizing': 'border-box'}});
+
+            wrapper.append(
+                header.append(this.Toggle(title, this.config.active, (evt) => {
+                    this.config = {active: evt.target.checked};
+                    this.button = this.logo;
+                    if(this.config.active === true) {
+                        this.attach();
+                    } else {
+                        this.detach();
+                    }
+                })),
+                this.Input('Search...', (evt) => {
+                    if(evt.which === 13) {
+                        $(evt.target).css('outline-color', '#f39c12');
+                        this.search(evt.target.value, $(evt.target));
+                    }
+                }),
+                options.append(
+                    this.Toggle('Video', this.config.video, (evt) => {
+                        this.config = {video: evt.target.checked};
+                        if(this.config.video === true && $('#mixer-container')[0] !== undefined) {
+                            this.mixer.append(this.video);
+                        } else if(this.config.video === false && $('#mixer-container')[0] !== undefined) {
+                            this.video.remove();
+                        }
+                    }).css('margin-bottom', '4px'),
+                    this.Toggle('Offline', this.config.offline, (evt) => {
+                        this.config = {offline: evt.target.checked};
+                        this.list();
+                    })
+                ),
+                scrlWrap.append(scroller)
+            );
+
+            this._popout = container.append(wrapper);
+        }
+    }
+    // #endregion
+
+    // #region BetterDiscord Event methods
+    observer() {
+        this.button = this.logo;
+        if($('#mixer-button')[0] === undefined && this.toolbar[0] !== undefined) {
+            this.toolbar.prepend(this.button);
+        }
+
+        if(this.config.users.length > 0 && this.config.last === null) {
+            this.config.last = this.config.users[Object.keys(this.config.users)[0]].id;
+        }
+
+        if(this.config.active && $('#mixer-container')[0] === undefined) {
+            this.attach();
+        } else if(this.config.active === false && $('#mixer-container')[0] !== undefined) {
+            this.detach();
+        }
+    }
+
+    load() {
+        this.updateCheck();
+    }
+
+    unload() {
+
+    }
+
+    /**
+     *
+     */
+    start() {
+        this.toolbar.prepend(this.button.on('click', (evt) => {
+            evt.preventDefault();
+            if(this.popout.parent()[0] === undefined) {
+                let e = $(evt.target);
+                this.container.append(this.popout);
+                this.popout.css({
+                    top: e.offset().top + e.height(),
+                    left: e.offset().left - (this.popout.width() - e.width())
+                });
+                this.list();
+            } else {
+                this.popout.detach();
+            }
+        }));
+
+        this.statusCheck = 5;
+    }
+
+    stop() {
+        this.button.detach();
+        this.detach();
+        this.statusCheck = false;
+        this.config = {save: $.now()};
+    }
+
+    // #endregion
+
+    // #region BetterDiscord getters
+    getName() {
+        return this.constructor.name;
+    }
+
+    getDescription() {
+        return "Attaches Mixer.com chat and optionally video directly to discord, enabling stream participation from within discord.";
+    }
+
+    getAuthor() {
+        return "Ve";
+    }
+
+    getVersion() {
+        return '0.2.9';
+    }
+    // #endregion
+
+    // #region Mixer Logo Base64 string getters
+    get logo() {
+        if(this.config.active === true) {
+            return this.mixerActive;
+        } else if(this.theme === 'dark') {
+            return this.mixerWhite;
+        } else {
+            return this.mixerBlack;
+        }
+    }
+
+    get mixerBlack() {
+        return 'PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz48c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkxheWVyXzEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IiB2aWV3Qm94PSIwIDAgNTEyIDUxMiIgc3R5bGU9ImVuYWJsZS1iYWNrZ3JvdW5kOm5ldyAwIDAgNTEyIDUxMjsiIHhtbDpzcGFjZT0icHJlc2VydmUiPjxwYXRoIGQ9Ik0xMTYuMDMsNzcuNjhjLTE1Ljc2LTIxLjI5LTQ2LjcyLTI0LjYxLTY2LjkxLTYuMzZjLTE3LjQyLDE2LjA0LTE4LjgsNDMuMTMtNC43LDYyLjIxbDkwLjk2LDEyMS45Mkw0My44NywzNzguNDhjLTE0LjEsMTkuMDgtMTIuOTksNDYuMTcsNC43LDYyLjIxYzIwLjE4LDE4LjI1LDUxLjE1LDE0LjkzLDY2LjkxLTYuMzZsMTI3LjczLTE3MS42OWMzLjA0LTQuMTUsMy4wNC05Ljk1LDAtMTQuMUwxMTYuMDMsNzcuNjh6Ii8+PHBhdGggZD0iTTM5Ni4zNyw3Ny42OGMxNS43Ni0yMS4yOSw0Ni43Mi0yNC42MSw2Ni45MS02LjM2YzE3LjQyLDE2LjA0LDE4LjgsNDMuMTMsNC43LDYyLjIxbC05MC45NiwxMjEuOTJsOTEuNTEsMTIzLjAzYzE0LjEsMTkuMDgsMTIuOTksNDYuMTctNC43LDYyLjIxYy0yMC4xOCwxOC4yNS01MS4xNSwxNC45My02Ni45MS02LjM2TDI2OS40NywyNjIuMzZjLTMuMDQtNC4xNS0zLjA0LTkuOTUsMC0xNC4xTDM5Ni4zNyw3Ny42OHoiLz48L3N2Zz4=';
+    }
+
+    get mixerWhite() {
+        return 'PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz48c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkxheWVyXzEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IiB2aWV3Qm94PSIwIDAgNTEyIDUxMiIgc3R5bGU9ImVuYWJsZS1iYWNrZ3JvdW5kOm5ldyAwIDAgNTEyIDUxMjsiIHhtbDpzcGFjZT0icHJlc2VydmUiPjxzdHlsZSB0eXBlPSJ0ZXh0L2NzcyI+LnN0MHtmaWxsOiNGRkZGRkY7fTwvc3R5bGU+PHBhdGggY2xhc3M9InN0MCIgZD0iTTExNi4wMyw3Ny42OGMtMTUuNzYtMjEuMjktNDYuNzItMjQuNjEtNjYuOTEtNi4zNmMtMTcuNDIsMTYuMDQtMTguOCw0My4xMy00LjcsNjIuMjFsOTAuOTYsMTIxLjkyTDQzLjg3LDM3OC40OGMtMTQuMSwxOS4wOC0xMi45OSw0Ni4xNyw0LjcsNjIuMjFjMjAuMTgsMTguMjUsNTEuMTUsMTQuOTMsNjYuOTEtNi4zNmwxMjcuNzMtMTcxLjY5YzMuMDQtNC4xNSwzLjA0LTkuOTUsMC0xNC4xTDExNi4wMyw3Ny42OHoiLz48cGF0aCBjbGFzcz0ic3QwIiBkPSJNMzk2LjM3LDc3LjY4YzE1Ljc2LTIxLjI5LDQ2LjcyLTI0LjYxLDY2LjkxLTYuMzZjMTcuNDIsMTYuMDQsMTguOCw0My4xMyw0LjcsNjIuMjFsLTkwLjk2LDEyMS45Mmw5MS41MSwxMjMuMDNjMTQuMSwxOS4wOCwxMi45OSw0Ni4xNy00LjcsNjIuMjFjLTIwLjE4LDE4LjI1LTUxLjE1LDE0LjkzLTY2LjkxLTYuMzZMMjY5LjQ3LDI2Mi4zNmMtMy4wNC00LjE1LTMuMDQtOS45NSwwLTE0LjFMMzk2LjM3LDc3LjY4eiIvPjwvc3ZnPg==';
+    }
+
+    get mixerActive() {
+        return 'PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz48c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkxheWVyXzEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IiB2aWV3Qm94PSIwIDAgNTEyIDUxMiIgc3R5bGU9ImVuYWJsZS1iYWNrZ3JvdW5kOm5ldyAwIDAgNTEyIDUxMjsiIHhtbDpzcGFjZT0icHJlc2VydmUiPjxzdHlsZSB0eXBlPSJ0ZXh0L2NzcyI+LnN0MHtmaWxsOiMwMzIxNEY7fS5zdDF7ZmlsbDojMUZCQUVEO308L3N0eWxlPjxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0xMTYuMDMsNzcuNjhjLTE1Ljc2LTIxLjI5LTQ2LjcyLTI0LjYxLTY2LjkxLTYuMzZjLTE3LjQyLDE2LjA0LTE4LjgsNDMuMTMtNC43LDYyLjIxbDkwLjk2LDEyMS45Mkw0My44NywzNzguNDhjLTE0LjEsMTkuMDgtMTIuOTksNDYuMTcsNC43LDYyLjIxYzIwLjE4LDE4LjI1LDUxLjE1LDE0LjkzLDY2LjkxLTYuMzZsMTI3LjczLTE3MS42OWMzLjA0LTQuMTUsMy4wNC05Ljk1LDAtMTQuMUwxMTYuMDMsNzcuNjh6Ii8+PHBhdGggY2xhc3M9InN0MSIgZD0iTTM5Ni4zNyw3Ny42OGMxNS43Ni0yMS4yOSw0Ni43Mi0yNC42MSw2Ni45MS02LjM2YzE3LjQyLDE2LjA0LDE4LjgsNDMuMTMsNC43LDYyLjIxbC05MC45NiwxMjEuOTJsOTEuNTEsMTIzLjAzYzE0LjEsMTkuMDgsMTIuOTksNDYuMTctNC43LDYyLjIxYy0yMC4xOCwxOC4yNS01MS4xNSwxNC45My02Ni45MS02LjM2TDI2OS40NywyNjIuMzZjLTMuMDQtNC4xNS0zLjA0LTkuOTUsMC0xNC4xTDM5Ni4zNyw3Ny42OHoiLz48L3N2Zz4=';
+    }
+
+    get mixerText() {
+        return 'PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz48c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkxheWVyXzEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IiB2aWV3Qm94PSIwIDAgNzEyIDIyMCIgc3R5bGU9ImVuYWJsZS1iYWNrZ3JvdW5kOm5ldyAwIDAgNzEyIDIyMDsiIHhtbDpzcGFjZT0icHJlc2VydmUiPjxzdHlsZSB0eXBlPSJ0ZXh0L2NzcyI+LnN0MHtmaWxsOiNGRkZGRkY7fS5zdDF7ZmlsbDojMUZCQUVEO308L3N0eWxlPjxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0yNTcsNjcuM2MtOSwwLTE2LjQsNy4zLTE2LjQsMTYuNHYxMTcuN2MwLDIuNCwxLjksNC4zLDQuMyw0LjNoMjQuMmMyLjQsMCw0LjMtMS45LDQuMy00LjNWODMuN0MyNzMuNCw3NC42LDI2Ni4xLDY3LjMsMjU3LDY3LjMiLz48cGF0aCBjbGFzcz0ic3QwIiBkPSJNMTY5LjQsNjcuNGMtMjAuMSwwLTM0LDguMy00NC4zLDI0LjJjLTEzLjctMzIuNC02MC40LTMxLjctNzkuOC0xLjlDNDIuMyw3NywzMSw2Ny42LDE3LjUsNjcuNmgtNC4xYzAsMjUuMSwwLDEwNC44LDAsMTMzLjhjMCwyLjQsMS45LDQuMyw0LjMsNC4zaDI0LjJjMi40LDAsNC4zLTEuOSw0LjMtNC4zVjEzMGMwLTE4LDguNi0zNS40LDI2LjQtMzUuNGMxNi42LDAsMjQuNiwxMC42LDI0LjYsMzIuNHY3NC4zYzAsMi40LDEuOSw0LjMsNC4zLDQuM2gyNC4yYzIuNCwwLDQuMy0xLjksNC4zLTQuM1YxMzBjMC0xNy4xLDkuNi0zNS40LDI2LjQtMzUuNGMyMC43LDAsMjQuOSwxNCwyNC45LDM1djcxLjhjMCwyLjQsMS45LDQuMyw0LjMsNC4zaDI0LjNjMi40LDAsNC4zLTEuOSw0LjMtNC4zdi03OC44QzIxNC4xLDg5LjIsMjAyLjMsNjcuNCwxNjkuNCw2Ny40Ii8+PHBhdGggY2xhc3M9InN0MCIgZD0iTTMyOS41LDczLjVjLTUuNy03LjctMTYuOS04LjktMjQuMi0yLjNjLTYuMyw1LjgtNi44LDE1LjYtMS43LDIyLjVsMzIuOSw0NC4xbC0zMy4xLDQ0LjVjLTUuMSw2LjktNC43LDE2LjcsMS43LDIyLjVjNy4zLDYuNiwxOC41LDUuNCwyNC4yLTIuM2w0Ni4yLTYyLjFjMS4xLTEuNSwxLjEtMy42LDAtNS4xTDMyOS41LDczLjV6Ii8+PHBhdGggY2xhc3M9InN0MSIgZD0iTTQzMC45LDczLjVjNS43LTcuNywxNi45LTguOSwyNC4yLTIuM2M2LjMsNS44LDYuOCwxNS42LDEuNywyMi41bC0zMi45LDQ0LjFsMzMuMSw0NC41YzUuMSw2LjksNC43LDE2LjctMS43LDIyLjVjLTcuMyw2LjYtMTguNSw1LjQtMjQuMi0yLjNMMzg1LDE0MC4zYy0xLjEtMS41LTEuMS0zLjYsMC01LjFMNDMwLjksNzMuNXoiLz48cGF0aCBjbGFzcz0ic3QxIiBkPSJNNTE5LDEwMi4yYzUuNy01LjcsMTIuNC04LjYsMjAuMS04LjZjOC40LDAsMTUsMi42LDE5LjcsNy44YzQuNCw1LDYuOCwxMi4yLDcsMjEuNmgtNTcuM0M1MTAuMSwxMTQuNiw1MTMuNywxMDcuNiw1MTksMTAyLjIgTTU3Mi4xLDE4MC4yYy0xLTEuMy0yLjctMS44LTQuMi0xLjNjMCwwLDAsMCwwLDBjLTE3LjEsNS45LTU2LjYsOS40LTU5LjUtMzAuNmg3NS42YzguMSwwLDE0LjYtNi41LDE0LjYtMTQuNmMwLTE4LjEtMy4zLTM1LjYtMTUuNi00OS4xYy0zMC4xLTMzLjMtMTA4LjItMjAuNy0xMDguMiw1NC44YzAsNzguMyw3My4yLDc2LjYsMTA2LjQsNjEuNGMyLjUtMS4xLDMuMi00LjMsMS42LTYuNEw1NzIuMSwxODAuMnoiLz48cGF0aCBjbGFzcz0ic3QxIiBkPSJNNjk3LjUsNjkuNEw2OTcuNSw2OS40Yy01LjgtMS42LTE1LjItMS4yLTE4LjItMC42Yy0xMS43LDMuNS0yMC4zLDExLjUtMjUuNSwyMy42Yy0xLjgtMTQtMTMuOC0yNC44LTI4LjMtMjQuOGgtNC4yYzAsMjUuMSwwLDEwNC45LDAsMTMzLjhjMCwyLjQsMS45LDQuMyw0LjMsNC4zaDI0LjJjMi40LDAsNC4zLTEuOSw0LjMtNC4zdi02NC44YzAtMjYuOCwxNS4xLTQ1LjYsNDAuNy0zNi4xYzIuOCwxLDUuOC0xLDUuOC00VjczLjZDNzAwLjcsNzEuNyw2OTkuMyw2OS45LDY5Ny41LDY5LjQiLz48cGF0aCBjbGFzcz0ic3QwIiBkPSJNMjM5LjUsMjYuNWMwLDkuNyw3LjksMTcuNSwxNy42LDE3LjVzMTcuNS03LjksMTcuNS0xNy41UzI2Ni43LDksMjU3LDlTMjM5LjUsMTYuOSwyMzkuNSwyNi41Ii8+PC9zdmc+';
+    }
+    // #endregion
+}

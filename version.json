@@ -1,21 +1,22 @@
 {
-    "version": "0.2.72",
+    "version": "0.2.9",
     "notes": {
         "credits": [
             "NoxDraconem for alpha, beta, delta and omega testing."
         ],
         "changes": [
-            "Streamer name will now be yellow if the streamer is being featured.",
-            "Added an option to show/hide offline streamers.",
-            "Beam button will now properly be added/removed when the plugin itself is enabled/disabled."
+            "Changed from Beam.pro to Mixer.com.",
+            "Redirected update checks to new mixer.com repository.",
+            "Featured streamer names will be the mixer blue color."
         ],
         "fixes": [
-            "Beam Button now properly toggles off state when the popout was closed by clicks anywhere outside of the button itself.",
-            "Beam button will no longer switch positions with other icons when switching from friends/dm's to guilds.",
-            "Update check does not return cached data anymore."
         ],
+
         "issues": [
-            "Nothing I know off... can't be true... :O"
+            "Going to the friends list in discord makes the button have incorrect color"
+        ],
+        "todo": [
+            "Needs more testing with co-streaming."
         ]
     }
 }
